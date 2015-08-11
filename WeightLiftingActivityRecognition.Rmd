@@ -1,0 +1,93 @@
+---
+title: "Weight Lifting Activity Recognition"
+author: "Alex Jacobs"
+date: "August 11, 2015"
+output: html_document
+---
+Executive summary
+Human activity recognition is growing in popularity, and diverging into a plethora of different uses. Here data was collected for the prediction of how well the subjects performed at doing prescribed exercises. Participants were asked to do dumbell exercises with accelerometers attached to the belt, forearm, arm and the dumbell itself.
+More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). From the dataset generated a random forest model was generated to predict how accurate the exercise was being perforemed, exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). The resulting model was 99% accurate in classifying the performance of the exercise. 
+
+Load Libraries and Data
+```{r, echo = TRUE}
+#Libraries
+library(caret)
+
+# Data (script must be run in folder with data)
+pmlTraining <- read.csv("pml-training.csv")
+pmlTesting <- read.csv("pml-testing.csv")
+
+# Data dimensions
+dim(pmlTraining)
+dim(pmlTesting)
+```
+
+The training and test set data was obtained from the follwoing links respectively.
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+The testing has numerous, variables with zero variance as can be seen in the appandix, and were thus removed from training and testing sets. The row number stored in the X varibale was also removed to prevent it skewing the model.
+
+```{r, echo=TRUE}
+# Test Data set has a lot of empty columns, remove from both train and test sets.
+nzv <- nearZeroVar(pmlTesting)
+pmlTraining <- pmlTraining[,-nzv]
+pmlTesting <- pmlTesting[, -nzv]
+
+# row number X will skew the results, thus must be removed.
+pmlTraining$X <- NULL
+pmlTesting$X <- NULL
+
+# Data dimensions
+dim(pmlTraining)
+dim(pmlTesting)
+```
+
+The data set was then split into a training set and a test data set for cross validation.
+
+```{r, echo=TRUE}
+#Create training and test sets
+set.seed(456)
+inTrain <- createDataPartition(pmlTraining$classe, p=0.7, list=FALSE)
+training <- pmlTraining[inTrain,]
+testing <- pmlTraining[-inTrain,]
+```
+
+Model building. Random Forest was used with mostly default parameters and training on all variables in the dataset
+
+```{r, echo=TRUE, cache=TRUE}
+set.seed(123)
+mod <- train(classe~.,
+              method="rf", 
+              data=training,
+              trControl = trainControl(method="cv"), 
+              number=3)
+```
+
+The model was then tested against the testing set created earlier, to find the out of sample error rate.
+
+```{r, echo=TRUE, cache=TRUE}
+pred <- predict(mod, testing)
+confMat <- confusionMatrix(pred, testing$classe)
+confMat$table
+accuracy <- confMat$overall[1]
+outOfSampleErrorRate <- (1-accuracy[[1]]) * 100
+accuracy <- accuracy * 100
+```
+
+The model accuracy based on the out of sample cross validation set was `r accuracy`%. While the out of sample error rate was `r outOfSampleErrorRate`%.
+Final prediction on the given test set was:
+
+```{r, echo=TRUE}
+# Orginal testing set
+predictionPML <- predict(mod, pmlTesting)
+predictionPML
+```
+
+Appendix
+
+```{r, echo=TRUE}
+# Orginal testing set
+pmlTestingOriginal <- read.csv("pml-testing.csv")
+nzv <- nearZeroVar(pmlTestingOriginal, saveMetrics = TRUE)
+table(nzv$zeroVar)
+```
